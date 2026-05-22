@@ -13,3 +13,14 @@ export const companies = sqliteTable("companies", {
   createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
   updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
 });
+
+export const competitors = sqliteTable("competitors", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  competitorName: text("competitor_name").notNull(),
+  geographies: text("geographies"),
+  marketCap: text("market_cap"),
+  mainProducts: text("main_products"),
+  targetDemographics: text("target_demographics"),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+});

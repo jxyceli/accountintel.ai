@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { getCompanyByDomain, upsertCompany, type CompanyData } from "@/app/actions";
+import { getCompanyByDomain, upsertCompany, type CompanyData, fetchCompetitors, upsertCompetitors, type CompetitorData } from "@/app/actions";
 
 type Persona = "VP Sales" | "SDR" | "Solutions Eng" | "CSM";
-type ActiveTab = "brief" | "outreach" | "tech";
+type ActiveTab = "brief" | "outreach" | "tech" | "competitors";
 
 interface Contact {
   name: string;
@@ -42,6 +42,7 @@ const tabs: { id: ActiveTab; label: string; icon: string }[] = [
   { id: "brief", label: "Brief", icon: "summarize" },
   { id: "outreach", label: "Outreach", icon: "mail" },
   { id: "tech", label: "Tech Stack", icon: "memory" },
+  { id: "competitors", label: "Competitors", icon: "compare_arrows" },
 ];
 
 function generatePersonaData(persona: string, companyName: string): Omit<AccountData, "company" | "industry" | "employees" | "revenue" | "hq" | "companyDescription"> {
@@ -376,11 +377,15 @@ export default function AccountDashboard() {
   const [accountData, setAccountData] = useState<AccountData | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editData, setEditData] = useState<CompanyData | null>(null);
+  const [companyId, setCompanyId] = useState<number | null>(null);
+  const [competitors, setCompetitors] = useState<CompetitorData[]>([]);
+  const [isLoadingCompetitors, setIsLoadingCompetitors] = useState(false);
 
   const analyzeAccount = useCallback(async () => {
     if (!domain.trim() || isLoading) return;
 
     setIsLoading(true);
+    setCompetitors([]);
 
     const domainName = domain.replace(/^(https?:\/\/)?(www\.)?/, "").split("/")[0];
     const companyName = domainName.split(".")[0].charAt(0).toUpperCase() + domainName.split(".")[0].slice(1);
@@ -390,7 +395,10 @@ export default function AccountDashboard() {
 
       const personaData = generatePersonaData(persona, companyName);
 
-      if (storedCompany) {
+      let company: CompanyData;
+
+      if (storedCompany && storedCompany.id) {
+        company = storedCompany;
         setAccountData({
           company: storedCompany.companyName,
           industry: storedCompany.industry ?? "Not specified",
@@ -401,8 +409,19 @@ export default function AccountDashboard() {
           ...personaData,
         });
       } else {
+        const result = await upsertCompany({
+          domain: domainName,
+          companyName: `${companyName} Inc.`,
+          websiteUrl: `https://${domainName}`,
+        });
+
+        if ("error" in result) {
+          throw new Error(result.error);
+        }
+
+        company = result;
         setAccountData({
-          company: `${companyName} Inc.`,
+          company: result.companyName,
           industry: "Not specified",
           employees: "Not specified",
           revenue: "Not specified",
@@ -410,12 +429,15 @@ export default function AccountDashboard() {
           companyDescription: undefined,
           ...personaData,
         });
+      }
 
-        await upsertCompany({
-          domain: domainName,
-          companyName: `${companyName} Inc.`,
-          websiteUrl: `https://${domainName}`,
-        });
+      setCompanyId(company.id ?? null);
+
+      if (company.id) {
+        setIsLoadingCompetitors(true);
+        const competitorList = await fetchCompetitors(company.id);
+        setCompetitors(competitorList);
+        setIsLoadingCompetitors(false);
       }
 
       setHasAnalyzed(true);
@@ -604,6 +626,91 @@ export default function AccountDashboard() {
     </>
   );
 
+  const competitorsTab = accountData && (
+    <>
+      <div className="mb-4">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-blue-50 rounded-lg flex items-center justify-center">
+              <span className="material-symbols-outlined text-blue-600 text-[20px]">compare_arrows</span>
+            </div>
+            <h3 className="text-base font-semibold text-gray-900">Competitor Landscape</h3>
+          </div>
+          <span className="text-xs text-gray-500">{competitors.length} competitors mapped</span>
+        </div>
+        {isLoadingCompetitors ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="w-6 h-6 border-2 border-blue-600/30 border-t-blue-600 rounded-full animate-spin" />
+          </div>
+        ) : competitors.length > 0 ? (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {competitors.map((comp, i) => (
+              <div key={comp.id ?? i} className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+                <div className="px-5 py-4 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white text-sm font-bold">
+                      {comp.competitorName.charAt(0)}
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-900">{comp.competitorName}</h4>
+                      <p className="text-xs text-gray-500">{comp.marketCap}</p>
+                    </div>
+                  </div>
+                  <span className="text-xs font-medium text-gray-400">#{i + 1}</span>
+                </div>
+                <div className="px-5 py-4 space-y-3">
+                  {comp.geographies.length > 0 && (
+                    <div>
+                      <span className="block text-[10px] font-medium text-gray-400 uppercase tracking-wider mb-1.5">Geographies</span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {comp.geographies.map((geo, j) => (
+                          <span key={j} className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-indigo-50 text-indigo-700 border border-indigo-100">
+                            {geo}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {comp.mainProducts.length > 0 && (
+                    <div>
+                      <span className="block text-[10px] font-medium text-gray-400 uppercase tracking-wider mb-1.5">Core Products</span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {comp.mainProducts.map((prod, j) => (
+                          <span key={j} className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-100">
+                            {prod}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {comp.targetDemographics.length > 0 && (
+                    <div>
+                      <span className="block text-[10px] font-medium text-gray-400 uppercase tracking-wider mb-1.5">Target Segments</span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {comp.targetDemographics.map((seg, j) => (
+                          <span key={j} className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-100">
+                            {seg}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-8 text-center">
+            <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+              <span className="material-symbols-outlined text-gray-400">group_off</span>
+            </div>
+            <p className="text-sm text-gray-500">No competitors mapped yet for {accountData.company}</p>
+          </div>
+        )}
+      </div>
+    </>
+  );
+
   return (
     <div className="flex flex-1 overflow-hidden">
       {/* Left Pane: Input */}
@@ -696,6 +803,7 @@ export default function AccountDashboard() {
           {hasAnalyzed && activeTab === "brief" && briefTab}
           {hasAnalyzed && activeTab === "outreach" && outreachTab}
           {hasAnalyzed && activeTab === "tech" && techTab}
+          {hasAnalyzed && activeTab === "competitors" && competitorsTab}
         </div>
       </main>
 

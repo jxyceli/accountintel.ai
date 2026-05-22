@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/db";
-import { companies } from "@/db/schema";
+import { companies, competitors } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
 export interface CompanyData {
@@ -14,6 +14,16 @@ export interface CompanyData {
   employees?: string | null;
   revenue?: string | null;
   hq?: string | null;
+}
+
+export interface CompetitorData {
+  id?: number;
+  companyId: number;
+  competitorName: string;
+  geographies: string[];
+  marketCap: string;
+  mainProducts: string[];
+  targetDemographics: string[];
 }
 
 export async function getCompanyByDomain(domain: string): Promise<CompanyData | null> {
@@ -99,5 +109,56 @@ export async function upsertCompany(data: CompanyData): Promise<CompanyData | { 
     };
   } catch {
     return { error: "Failed to save company data" };
+  }
+}
+
+export async function fetchCompetitors(companyId: number): Promise<CompetitorData[]> {
+  try {
+    const results = await db.select().from(competitors).where(eq(competitors.companyId, companyId));
+    return results.map((c) => ({
+      id: c.id ?? undefined,
+      companyId: c.companyId,
+      competitorName: c.competitorName,
+      geographies: c.geographies ? JSON.parse(c.geographies) : [],
+      marketCap: c.marketCap ?? "Private",
+      mainProducts: c.mainProducts ? JSON.parse(c.mainProducts) : [],
+      targetDemographics: c.targetDemographics ? JSON.parse(c.targetDemographics) : [],
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export async function upsertCompetitors(companyId: number, competitorList: Omit<CompetitorData, "id" | "companyId">[]): Promise<CompetitorData[] | { error: string }> {
+  try {
+    await db.delete(competitors).where(eq(competitors.companyId, companyId));
+
+    if (competitorList.length === 0) return [];
+
+    const inserted = await db
+      .insert(competitors)
+      .values(
+        competitorList.map((c) => ({
+          companyId,
+          competitorName: c.competitorName,
+          geographies: JSON.stringify(c.geographies),
+          marketCap: c.marketCap,
+          mainProducts: JSON.stringify(c.mainProducts),
+          targetDemographics: JSON.stringify(c.targetDemographics),
+        }))
+      )
+      .returning();
+
+    return inserted.map((c) => ({
+      id: c.id ?? undefined,
+      companyId: c.companyId,
+      competitorName: c.competitorName,
+      geographies: c.geographies ? JSON.parse(c.geographies) : [],
+      marketCap: c.marketCap ?? "Private",
+      mainProducts: c.mainProducts ? JSON.parse(c.mainProducts) : [],
+      targetDemographics: c.targetDemographics ? JSON.parse(c.targetDemographics) : [],
+    }));
+  } catch {
+    return { error: "Failed to save competitor data" };
   }
 }

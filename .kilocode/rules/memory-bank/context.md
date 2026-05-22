@@ -20,12 +20,16 @@ The application is an Account Intelligence Dashboard with SQLite + Drizzle ORM f
 - [x] AccountDashboard updated to fetch from database instead of mock data
 - [x] Manual override edit modal for company background data
 - [x] suppressHydrationWarning added to RootLayout body tag
+- [x] Competitors table with foreign key to companies (geographies, market_cap, main_products, target_demographics stored as JSON)
+- [x] fetchCompetitors and upsertCompetitors server actions
+- [x] Competitors tab in AccountDashboard with badge-based comparison grid
+- [x] force-dynamic export on home page
 
 ## Current Structure
 
 | File/Directory | Purpose | Status |
 |----------------|---------|--------|
-| `src/app/page.tsx` | Home page | ✅ Ready |
+| `src/app/page.tsx` | Home page (force-dynamic) | ✅ Updated |
 | `src/app/layout.tsx` | Root layout | ✅ Ready |
 | `src/app/globals.css` | Global styles | ✅ Ready |
 | `src/app/actions.ts` | Server actions for company CRUD | ✅ Ready |
@@ -99,3 +103,4 @@ export async function GET() {
 |------|---------|
 | Initial | Template created with base setup |
 | 2026-05-22 | Added SQLite + Drizzle ORM database, structured company data model, server actions, manual override UI |
+| 2026-05-22 | Added competitors table, fetchCompetitors/upsertCompetitors server actions, competitor intelligence UI tab with badge comparison grid, force-dynamic page |
