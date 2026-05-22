@@ -1,14 +1,15 @@
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
-import { db } from "@/db";
 import { companies } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { detectAllMarketMoves } from "@/app/actions";
-
-const CRON_SECRET = process.env.CRON_SECRET;
 
 export async function POST(request: Request) {
+  const { db } = await import("@/db");
+  const { detectAllMarketMoves } = await import("@/app/actions");
+
+  const CRON_SECRET = process.env.CRON_SECRET;
+
   if (CRON_SECRET) {
     const authHeader = request.headers.get("authorization");
     if (authHeader !== `Bearer ${CRON_SECRET}`) {
