@@ -15,6 +15,13 @@
       "when": 1779480686031,
       "tag": "0001_soft_natasha_romanoff",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1779481461859,
+      "tag": "0002_medical_colonel_america",
+      "breakpoints": true
     }
   ]
 }

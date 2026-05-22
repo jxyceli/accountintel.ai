@@ -22,5 +22,22 @@ export const competitors = sqliteTable("competitors", {
   marketCap: text("market_cap"),
   mainProducts: text("main_products"),
   targetDemographics: text("target_demographics"),
+  monitoringStatus: text("monitoring_status").default("Active"),
+  owner: text("owner"),
+  notes: text("notes"),
+  websiteUrl: text("website_url"),
+  pricingUrl: text("pricing_url"),
+  lastHashed: text("last_hashed"),
   createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+});
+
+export const competitorMarketMoves = sqliteTable("competitor_market_moves", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  competitorId: integer("competitor_id").notNull().references(() => competitors.id, { onDelete: "cascade" }),
+  moveType: text("move_type").notNull(),
+  severity: text("severity").default("info"),
+  title: text("title").notNull(),
+  description: text("description"),
+  sourceUrl: text("source_url"),
+  detectedAt: integer("detected_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
 });

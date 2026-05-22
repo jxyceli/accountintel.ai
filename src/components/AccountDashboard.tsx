@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { getCompanyByDomain, upsertCompany, type CompanyData, fetchCompetitors, upsertCompetitors, type CompetitorData } from "@/app/actions";
+import { getCompanyByDomain, upsertCompany, type CompanyData, fetchCompetitors, upsertCompetitors, updateCompetitorCRM, fetchMarketMoves, type CompetitorData, type MarketMoveData } from "@/app/actions";
 
 type Persona = "VP Sales" | "SDR" | "Solutions Eng" | "CSM";
-type ActiveTab = "brief" | "outreach" | "tech" | "competitors";
+type ActiveTab = "brief" | "outreach" | "tech" | "competitors" | "crm" | "activity";
 
 interface Contact {
   name: string;
@@ -43,6 +43,8 @@ const tabs: { id: ActiveTab; label: string; icon: string }[] = [
   { id: "outreach", label: "Outreach", icon: "mail" },
   { id: "tech", label: "Tech Stack", icon: "memory" },
   { id: "competitors", label: "Competitors", icon: "compare_arrows" },
+  { id: "crm", label: "CRM", icon: "pipeline" },
+  { id: "activity", label: "Activity Feed", icon: "notifications" },
 ];
 
 function generatePersonaData(persona: string, companyName: string): Omit<AccountData, "company" | "industry" | "employees" | "revenue" | "hq" | "companyDescription"> {
@@ -380,6 +382,46 @@ export default function AccountDashboard() {
   const [companyId, setCompanyId] = useState<number | null>(null);
   const [competitors, setCompetitors] = useState<CompetitorData[]>([]);
   const [isLoadingCompetitors, setIsLoadingCompetitors] = useState(false);
+  const [marketMoves, setMarketMoves] = useState<MarketMoveData[]>([]);
+  const [isLoadingMoves, setIsLoadingMoves] = useState(false);
+  const [editingNote, setEditingNote] = useState<number | null>(null);
+  const [noteDraft, setNoteDraft] = useState("");
+
+  const loadMarketMoves = useCallback(async (cid: number) => {
+    if (!cid) return;
+    setIsLoadingMoves(true);
+    const moves = await fetchMarketMoves(cid);
+    setMarketMoves(moves);
+    setIsLoadingMoves(false);
+  }, []);
+
+  const handleStatusChange = useCallback(async (id: number, status: string) => {
+    const result = await updateCompetitorCRM(id, { monitoringStatus: status });
+    if (!("error" in result)) {
+      setCompetitors((prev) =>
+        prev.map((c) => (c.id === id ? { ...c, monitoringStatus: status } : c))
+      );
+    }
+  }, []);
+
+  const handleOwnerChange = useCallback(async (id: number, owner: string) => {
+    const result = await updateCompetitorCRM(id, { owner });
+    if (!("error" in result)) {
+      setCompetitors((prev) =>
+        prev.map((c) => (c.id === id ? { ...c, owner } : c))
+      );
+    }
+  }, []);
+
+  const handleNoteSave = useCallback(async (id: number) => {
+    const result = await updateCompetitorCRM(id, { notes: noteDraft });
+    if (!("error" in result)) {
+      setCompetitors((prev) =>
+        prev.map((c) => (c.id === id ? { ...c, notes: noteDraft } : c))
+      );
+    }
+    setEditingNote(null);
+  }, [noteDraft]);
 
   const analyzeAccount = useCallback(async () => {
     if (!domain.trim() || isLoading) return;
@@ -438,6 +480,9 @@ export default function AccountDashboard() {
         const competitorList = await fetchCompetitors(company.id);
         setCompetitors(competitorList);
         setIsLoadingCompetitors(false);
+
+        const moves = await fetchMarketMoves(company.id);
+        setMarketMoves(moves);
       }
 
       setHasAnalyzed(true);
@@ -711,6 +756,211 @@ export default function AccountDashboard() {
     </>
   );
 
+  const crmTab = accountData && (
+    <>
+      <div className="mb-4">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-blue-50 rounded-lg flex items-center justify-center">
+              <span className="material-symbols-outlined text-blue-600 text-[20px]">pipeline</span>
+            </div>
+            <h3 className="text-base font-semibold text-gray-900">Competitor CRM Pipeline</h3>
+          </div>
+        </div>
+        {competitors.length > 0 ? (
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-200 bg-gray-50">
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Competitor</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Owner</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Market Cap</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell">Segments</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider hidden xl:table-cell">Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {competitors.map((comp, i) => (
+                    <tr key={comp.id ?? i} className="border-b border-gray-100 last:border-b-0 hover:bg-gray-50/50 transition">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center text-white text-xs font-bold shrink-0">
+                            {comp.competitorName.charAt(0)}
+                          </div>
+                          <span className="font-medium text-gray-900">{comp.competitorName}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <select
+                          value={comp.monitoringStatus ?? "Active"}
+                          onChange={(e) => comp.id && handleStatusChange(comp.id, e.target.value)}
+                          className={`text-xs font-medium px-2.5 py-1 rounded-full border-0 cursor-pointer ${
+                            comp.monitoringStatus === "High Priority"
+                              ? "bg-red-50 text-red-700"
+                              : comp.monitoringStatus === "Archived"
+                              ? "bg-gray-100 text-gray-500"
+                              : "bg-green-50 text-green-700"
+                          }`}
+                        >
+                          <option value="Active">Active</option>
+                          <option value="High Priority">High Priority</option>
+                          <option value="Archived">Archived</option>
+                        </select>
+                      </td>
+                      <td className="px-4 py-3">
+                        <input
+                          type="text"
+                          value={comp.owner ?? ""}
+                          onChange={(e) => comp.id && handleOwnerChange(comp.id, e.target.value)}
+                          placeholder="Unassigned"
+                          className="text-xs bg-transparent border-0 focus:ring-0 p-0 w-24 text-gray-600 placeholder-gray-400"
+                        />
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-xs text-gray-500">{comp.marketCap}</span>
+                      </td>
+                      <td className="px-4 py-3 hidden lg:table-cell">
+                        <div className="flex flex-wrap gap-1">
+                          {comp.targetDemographics.slice(0, 2).map((seg, j) => (
+                            <span key={j} className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700">
+                              {seg}
+                            </span>
+                          ))}
+                          {comp.targetDemographics.length > 2 && (
+                            <span className="text-[10px] text-gray-400">+{comp.targetDemographics.length - 2}</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 hidden xl:table-cell">
+                        {editingNote === comp.id ? (
+                          <div className="flex gap-1">
+                            <input
+                              type="text"
+                              value={noteDraft}
+                              onChange={(e) => setNoteDraft(e.target.value)}
+                              className="text-xs border border-gray-300 rounded px-2 py-1 w-40 focus:outline-none focus:border-blue-600"
+                              autoFocus
+                              onKeyDown={(e) => e.key === "Enter" && comp.id && handleNoteSave(comp.id)}
+                            />
+                            <button onClick={() => comp.id && handleNoteSave(comp.id)} className="text-xs text-blue-600 hover:text-blue-700">Save</button>
+                            <button onClick={() => setEditingNote(null)} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              if (comp.id) {
+                                setEditingNote(comp.id);
+                                setNoteDraft(comp.notes ?? "");
+                              }
+                            }}
+                            className="text-xs text-gray-400 hover:text-blue-600 truncate block max-w-48"
+                          >
+                            {comp.notes || "Add note..."}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-8 text-center">
+            <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+              <span className="material-symbols-outlined text-gray-400">group_off</span>
+            </div>
+            <p className="text-sm text-gray-500">No competitors to track. Add competitors first in the Competitors tab.</p>
+          </div>
+        )}
+      </div>
+    </>
+  );
+
+  const activityTab = accountData && (
+    <>
+      <div className="mb-4">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-blue-50 rounded-lg flex items-center justify-center">
+              <span className="material-symbols-outlined text-blue-600 text-[20px]">notifications</span>
+            </div>
+            <h3 className="text-base font-semibold text-gray-900">Market Moves Feed</h3>
+          </div>
+          <button
+            onClick={() => companyId && loadMarketMoves(companyId)}
+            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 transition"
+          >
+            <span className="material-symbols-outlined text-[16px]">refresh</span>
+            Refresh
+          </button>
+        </div>
+        {isLoadingMoves ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="w-6 h-6 border-2 border-blue-600/30 border-t-blue-600 rounded-full animate-spin" />
+          </div>
+        ) : marketMoves.length > 0 ? (
+          <div className="space-y-3">
+            {marketMoves.map((move, i) => (
+              <div key={move.id ?? i} className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow p-5">
+                <div className="flex items-start gap-3">
+                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                    move.severity === "high" ? "bg-red-50" : move.severity === "medium" ? "bg-amber-50" : "bg-blue-50"
+                  }`}>
+                    <span className={`material-symbols-outlined text-[20px] ${
+                      move.severity === "high" ? "text-red-600" : move.severity === "medium" ? "text-amber-600" : "text-blue-600"
+                    }`}>
+                      {move.moveType === "Pricing Adjustment" ? "payments" : "update"}
+                    </span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h4 className="text-sm font-semibold text-gray-900">{move.title}</h4>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                        move.severity === "high" ? "bg-red-50 text-red-700" :
+                        move.severity === "medium" ? "bg-amber-50 text-amber-700" :
+                        "bg-blue-50 text-blue-700"
+                      }`}>
+                        {move.moveType}
+                      </span>
+                    </div>
+                    {move.description && (
+                      <p className="text-xs text-gray-500 mb-2">{move.description}</p>
+                    )}
+                    <div className="flex items-center gap-3 text-xs text-gray-400">
+                      {move.competitorName && (
+                        <span>{move.competitorName}</span>
+                      )}
+                      {move.detectedAt && (
+                        <span>{move.detectedAt.toLocaleDateString()}</span>
+                      )}
+                      {move.sourceUrl && (
+                        <a href={move.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-700 flex items-center gap-0.5">
+                          Source
+                          <span className="material-symbols-outlined text-[14px]">open_in_new</span>
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-8 text-center">
+            <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+              <span className="material-symbols-outlined text-gray-400">notifications_none</span>
+            </div>
+            <p className="text-sm text-gray-500">No market moves detected yet.</p>
+            <p className="text-xs text-gray-400 mt-1">Market moves appear when competitor changes are detected.</p>
+          </div>
+        )}
+      </div>
+    </>
+  );
+
   return (
     <div className="flex flex-1 overflow-hidden">
       {/* Left Pane: Input */}
@@ -804,6 +1054,8 @@ export default function AccountDashboard() {
           {hasAnalyzed && activeTab === "outreach" && outreachTab}
           {hasAnalyzed && activeTab === "tech" && techTab}
           {hasAnalyzed && activeTab === "competitors" && competitorsTab}
+          {hasAnalyzed && activeTab === "crm" && crmTab}
+          {hasAnalyzed && activeTab === "activity" && activityTab}
         </div>
       </main>
 

@@ -1,8 +1,9 @@
 "use server";
 
 import { db } from "@/db";
-import { companies, competitors } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { companies, competitors, competitorMarketMoves } from "@/db/schema";
+import { eq, desc } from "drizzle-orm";
+import { createHash } from "crypto";
 
 export interface CompanyData {
   id?: number;
@@ -24,6 +25,23 @@ export interface CompetitorData {
   marketCap: string;
   mainProducts: string[];
   targetDemographics: string[];
+  monitoringStatus?: string;
+  owner?: string | null;
+  notes?: string | null;
+  websiteUrl?: string | null;
+  pricingUrl?: string | null;
+}
+
+export interface MarketMoveData {
+  id?: number;
+  competitorId: number;
+  competitorName?: string;
+  moveType: string;
+  severity: string;
+  title: string;
+  description?: string | null;
+  sourceUrl?: string | null;
+  detectedAt?: Date;
 }
 
 export async function getCompanyByDomain(domain: string): Promise<CompanyData | null> {
@@ -123,9 +141,154 @@ export async function fetchCompetitors(companyId: number): Promise<CompetitorDat
       marketCap: c.marketCap ?? "Private",
       mainProducts: c.mainProducts ? JSON.parse(c.mainProducts) : [],
       targetDemographics: c.targetDemographics ? JSON.parse(c.targetDemographics) : [],
+      monitoringStatus: c.monitoringStatus ?? "Active",
+      owner: c.owner,
+      notes: c.notes,
+      websiteUrl: c.websiteUrl,
+      pricingUrl: c.pricingUrl,
     }));
   } catch {
     return [];
+  }
+}
+
+export async function updateCompetitorCRM(id: number, updates: { monitoringStatus?: string; owner?: string; notes?: string }): Promise<CompetitorData | { error: string }> {
+  try {
+    const result = await db
+      .update(competitors)
+      .set({
+        monitoringStatus: updates.monitoringStatus,
+        owner: updates.owner,
+        notes: updates.notes,
+      })
+      .where(eq(competitors.id, id))
+      .returning();
+
+    const c = result[0];
+    return {
+      id: c.id ?? undefined,
+      companyId: c.companyId,
+      competitorName: c.competitorName,
+      geographies: c.geographies ? JSON.parse(c.geographies) : [],
+      marketCap: c.marketCap ?? "Private",
+      mainProducts: c.mainProducts ? JSON.parse(c.mainProducts) : [],
+      targetDemographics: c.targetDemographics ? JSON.parse(c.targetDemographics) : [],
+      monitoringStatus: c.monitoringStatus ?? "Active",
+      owner: c.owner,
+      notes: c.notes,
+      websiteUrl: c.websiteUrl,
+      pricingUrl: c.pricingUrl,
+    };
+  } catch {
+    return { error: "Failed to update competitor" };
+  }
+}
+
+export async function fetchMarketMoves(companyId: number, limit = 50): Promise<MarketMoveData[]> {
+  try {
+    const results = await db
+      .select()
+      .from(competitorMarketMoves)
+      .innerJoin(competitors, eq(competitorMarketMoves.competitorId, competitors.id))
+      .where(eq(competitors.companyId, companyId))
+      .orderBy(desc(competitorMarketMoves.detectedAt))
+      .limit(limit);
+
+    return results.map((r) => ({
+      id: r.competitor_market_moves.id ?? undefined,
+      competitorId: r.competitor_market_moves.competitorId,
+      competitorName: r.competitors.competitorName,
+      moveType: r.competitor_market_moves.moveType,
+      severity: r.competitor_market_moves.severity ?? "info",
+      title: r.competitor_market_moves.title,
+      description: r.competitor_market_moves.description,
+      sourceUrl: r.competitor_market_moves.sourceUrl,
+      detectedAt: r.competitor_market_moves.detectedAt ?? undefined,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export async function detectMarketMove(competitorId: number): Promise<{ detected: boolean; move?: MarketMoveData; error?: string }> {
+  try {
+    const result = await db.select().from(competitors).where(eq(competitors.id, competitorId));
+    if (result.length === 0) return { detected: false, error: "Competitor not found" };
+
+    const competitor = result[0];
+    const urlsToCheck = [competitor.websiteUrl, competitor.pricingUrl].filter(Boolean) as string[];
+
+    if (urlsToCheck.length === 0) return { detected: false };
+
+    for (const url of urlsToCheck) {
+      try {
+        const response = await fetch(url, { headers: { "User-Agent": "MarketMonitor/1.0" } });
+        const html = await response.text();
+
+        const contentBlocks = html
+          .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+          .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+          .replace(/<[^>]+>/g, " ")
+          .replace(/\s+/g, " ")
+          .trim()
+          .slice(0, 5000);
+
+        const currentHash = createHash("sha256").update(contentBlocks).digest("hex");
+
+        if (competitor.lastHashed && competitor.lastHashed !== currentHash) {
+          const isPricing = url === competitor.pricingUrl;
+          const moveType = isPricing ? "Pricing Adjustment" : "Content Update";
+          const severity = isPricing ? "high" : "medium";
+
+          await db.insert(competitorMarketMoves).values({
+            competitorId,
+            moveType,
+            severity,
+            title: `${competitor.competitorName}: ${moveType} Detected`,
+            description: `Change detected on ${isPricing ? "pricing" : "landing"} page. Content hash updated.`,
+            sourceUrl: url,
+          });
+
+          return {
+            detected: true,
+            move: {
+              competitorId,
+              competitorName: competitor.competitorName,
+              moveType,
+              severity,
+              title: `${competitor.competitorName}: ${moveType} Detected`,
+              description: `Change detected on ${isPricing ? "pricing" : "landing"} page.`,
+              sourceUrl: url,
+              detectedAt: new Date(),
+            },
+          };
+        }
+
+        await db.update(competitors).set({ lastHashed: currentHash }).where(eq(competitors.id, competitorId));
+      } catch {
+        continue;
+      }
+    }
+
+    return { detected: false };
+  } catch {
+    return { detected: false, error: "Detection failed" };
+  }
+}
+
+export async function detectAllMarketMoves(companyId: number): Promise<{ total: number; changes: number }> {
+  try {
+    const competitorList = await db.select().from(competitors).where(eq(competitors.companyId, companyId));
+    let changes = 0;
+
+    for (const competitor of competitorList) {
+      const result = await detectMarketMove(competitor.id);
+      if (result.detected) changes++;
+    }
+
+    return { total: competitorList.length, changes };
+  } catch {
+    return { total: 0, changes: 0 };
   }
 }
 

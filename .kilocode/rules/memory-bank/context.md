@@ -24,6 +24,13 @@ The application is an Account Intelligence Dashboard with SQLite + Drizzle ORM f
 - [x] fetchCompetitors and upsertCompetitors server actions
 - [x] Competitors tab in AccountDashboard with badge-based comparison grid
 - [x] force-dynamic export on home page
+- [x] CRM pipeline table with monitoring status (Active/High Priority/Archived), owner assignment, inline notes editing
+- [x] Market Moves Feed with severity-based categorization (high/medium/info)
+- [x] detectMarketMove server action with SHA-256 content hashing for change detection
+- [x] detectAllMarketMoves batch detection for all competitors
+- [x] Cron API route at /api/cron/detect-moves for automated market monitoring
+- [x] competitor_market_moves table for tracking detected competitor changes
+- [x] Competitors table extended: monitoring_status, owner, notes, website_url, pricing_url, last_hashed
 
 ## Current Structure
 
@@ -32,12 +39,13 @@ The application is an Account Intelligence Dashboard with SQLite + Drizzle ORM f
 | `src/app/page.tsx` | Home page (force-dynamic) | ✅ Updated |
 | `src/app/layout.tsx` | Root layout | ✅ Ready |
 | `src/app/globals.css` | Global styles | ✅ Ready |
-| `src/app/actions.ts` | Server actions for company CRUD | ✅ Ready |
-| `src/components/AccountDashboard.tsx` | Main dashboard component | ✅ Updated |
-| `src/db/schema.ts` | Drizzle ORM schema (companies table) | ✅ Ready |
+| `src/app/actions.ts` | Server actions (company CRUD, competitor CRM, market move detection) | ✅ Updated |
+| `src/app/api/cron/detect-moves/route.ts` | Cron endpoint for automated market monitoring | ✅ Ready |
+| `src/components/AccountDashboard.tsx` | Main dashboard (6 tabs: Brief, Outreach, Tech, Competitors, CRM, Activity Feed) | ✅ Updated |
+| `src/db/schema.ts` | Drizzle ORM schema (companies, competitors, competitor_market_moves) | ✅ Updated |
 | `src/db/index.ts` | Database client | ✅ Ready |
 | `src/db/migrate.ts` | Migration runner | ✅ Ready |
-| `src/db/migrations/` | Generated SQL migrations | ✅ Ready |
+| `src/db/migrations/` | Generated SQL migrations (3 files) | ✅ Ready |
 | `drizzle.config.ts` | Drizzle configuration | ✅ Ready |
 | `.kilocode/` | AI context & recipes | ✅ Ready |
 
@@ -104,3 +112,4 @@ export async function GET() {
 | Initial | Template created with base setup |
 | 2026-05-22 | Added SQLite + Drizzle ORM database, structured company data model, server actions, manual override UI |
 | 2026-05-22 | Added competitors table, fetchCompetitors/upsertCompetitors server actions, competitor intelligence UI tab with badge comparison grid, force-dynamic page |
+| 2026-05-22 | Added CRM pipeline table, Market Moves Feed, content hashing detection, cron API route, competitor_market_moves table |
