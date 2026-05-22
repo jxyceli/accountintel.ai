@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { getCompanyByDomain, upsertCompany, type CompanyData } from "@/app/actions";
 
 type Persona = "VP Sales" | "SDR" | "Solutions Eng" | "CSM";
 type ActiveTab = "brief" | "outreach" | "tech";
@@ -23,6 +24,7 @@ interface AccountData {
   employees: string;
   revenue: string;
   hq: string;
+  companyDescription?: string;
   opportunities: string[];
   risks: string[];
   contacts: Contact[];
@@ -42,8 +44,8 @@ const tabs: { id: ActiveTab; label: string; icon: string }[] = [
   { id: "tech", label: "Tech Stack", icon: "memory" },
 ];
 
-function generatePersonaData(persona: string, companyName: string): Omit<AccountData, "company" | "industry" | "employees" | "revenue" | "hq"> {
-  const dataMap: Record<string, Omit<AccountData, "company" | "industry" | "employees" | "revenue" | "hq">> = {
+function generatePersonaData(persona: string, companyName: string): Omit<AccountData, "company" | "industry" | "employees" | "revenue" | "hq" | "companyDescription"> {
+  const dataMap: Record<string, Omit<AccountData, "company" | "industry" | "employees" | "revenue" | "hq" | "companyDescription">> = {
     "VP Sales": {
       opportunities: [
         "Expanding into mid-market segment with 40% growth potential",
@@ -248,6 +250,123 @@ function BulletList({ items }: { items: string[] }) {
   );
 }
 
+function CompanyEditModal({
+  isOpen,
+  onClose,
+  onSave,
+  initialData,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (data: CompanyData) => void;
+  initialData: CompanyData;
+}) {
+  const [formData, setFormData] = useState<CompanyData>(initialData);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSave(formData);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+          <h2 className="text-lg font-semibold text-gray-900">Edit Company Data</h2>
+          <button onClick={onClose} className="p-1 rounded-full hover:bg-gray-100 transition">
+            <span className="material-symbols-outlined text-gray-500">close</span>
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Company Name</label>
+            <input
+              type="text"
+              value={formData.companyName}
+              onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100 transition"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Description / Background</label>
+            <textarea
+              value={formData.companyDescription ?? ""}
+              onChange={(e) => setFormData({ ...formData, companyDescription: e.target.value })}
+              rows={3}
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100 transition resize-none"
+              placeholder="Enter company background information..."
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Industry</label>
+            <input
+              type="text"
+              value={formData.industry ?? ""}
+              onChange={(e) => setFormData({ ...formData, industry: e.target.value })}
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100 transition"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Website URL</label>
+            <input
+              type="url"
+              value={formData.websiteUrl ?? ""}
+              onChange={(e) => setFormData({ ...formData, websiteUrl: e.target.value })}
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100 transition"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Employees</label>
+              <input
+                type="text"
+                value={formData.employees ?? ""}
+                onChange={(e) => setFormData({ ...formData, employees: e.target.value })}
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100 transition"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Revenue</label>
+              <input
+                type="text"
+                value={formData.revenue ?? ""}
+                onChange={(e) => setFormData({ ...formData, revenue: e.target.value })}
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100 transition"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">HQ Location</label>
+            <input
+              type="text"
+              value={formData.hq ?? ""}
+              onChange={(e) => setFormData({ ...formData, hq: e.target.value })}
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100 transition"
+            />
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-2.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="flex-1 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition"
+            >
+              Save Changes
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default function AccountDashboard() {
   const [domain, setDomain] = useState("");
   const [persona, setPersona] = useState<Persona>("VP Sales");
@@ -255,30 +374,107 @@ export default function AccountDashboard() {
   const [hasAnalyzed, setHasAnalyzed] = useState(false);
   const [activeTab, setActiveTab] = useState<ActiveTab>("brief");
   const [accountData, setAccountData] = useState<AccountData | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editData, setEditData] = useState<CompanyData | null>(null);
 
-  const analyzeAccount = useCallback(() => {
+  const analyzeAccount = useCallback(async () => {
     if (!domain.trim() || isLoading) return;
 
     setIsLoading(true);
 
-    setTimeout(() => {
-      setIsLoading(false);
-      setHasAnalyzed(true);
+    const domainName = domain.replace(/^(https?:\/\/)?(www\.)?/, "").split("/")[0];
+    const companyName = domainName.split(".")[0].charAt(0).toUpperCase() + domainName.split(".")[0].slice(1);
 
-      const domainName = domain.replace(/^(https?:\/\/)?(www\.)?/, "").split("/")[0];
-      const companyName = domainName.split(".")[0].charAt(0).toUpperCase() + domainName.split(".")[0].slice(1);
+    try {
+      const storedCompany = await getCompanyByDomain(domainName);
+
       const personaData = generatePersonaData(persona, companyName);
 
+      if (storedCompany) {
+        setAccountData({
+          company: storedCompany.companyName,
+          industry: storedCompany.industry ?? "Not specified",
+          employees: storedCompany.employees ?? "Not specified",
+          revenue: storedCompany.revenue ?? "Not specified",
+          hq: storedCompany.hq ?? "Not specified",
+          companyDescription: storedCompany.companyDescription ?? undefined,
+          ...personaData,
+        });
+      } else {
+        setAccountData({
+          company: `${companyName} Inc.`,
+          industry: "Not specified",
+          employees: "Not specified",
+          revenue: "Not specified",
+          hq: "Not specified",
+          companyDescription: undefined,
+          ...personaData,
+        });
+
+        await upsertCompany({
+          domain: domainName,
+          companyName: `${companyName} Inc.`,
+          websiteUrl: `https://${domainName}`,
+        });
+      }
+
+      setHasAnalyzed(true);
+    } catch {
+      const personaData = generatePersonaData(persona, companyName);
       setAccountData({
         company: `${companyName} Inc.`,
-        industry: "Enterprise SaaS",
-        employees: "500-1000",
-        revenue: "$50M-$100M ARR",
-        hq: "San Francisco, CA",
+        industry: "Not specified",
+        employees: "Not specified",
+        revenue: "Not specified",
+        hq: "Not specified",
+        companyDescription: undefined,
         ...personaData,
       });
-    }, 2000);
+      setHasAnalyzed(true);
+    } finally {
+      setIsLoading(false);
+    }
   }, [domain, isLoading, persona]);
+
+  const openEditModal = useCallback(() => {
+    if (!accountData) return;
+    const domainName = domain.replace(/^(https?:\/\/)?(www\.)?/, "").split("/")[0];
+    setEditData({
+      domain: domainName,
+      companyName: accountData.company,
+      companyDescription: accountData.companyDescription ?? "",
+      industry: accountData.industry === "Not specified" ? "" : accountData.industry,
+      websiteUrl: "",
+      employees: accountData.employees === "Not specified" ? "" : accountData.employees,
+      revenue: accountData.revenue === "Not specified" ? "" : accountData.revenue,
+      hq: accountData.hq === "Not specified" ? "" : accountData.hq,
+    });
+    setIsEditModalOpen(true);
+  }, [accountData, domain]);
+
+  const handleSaveCompanyData = useCallback(async (data: CompanyData) => {
+    const result = await upsertCompany(data);
+
+    if ("error" in result) {
+      console.error(result.error);
+      return;
+    }
+
+    setAccountData((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        company: result.companyName,
+        industry: result.industry ?? "Not specified",
+        employees: result.employees ?? "Not specified",
+        revenue: result.revenue ?? "Not specified",
+        hq: result.hq ?? "Not specified",
+        companyDescription: result.companyDescription ?? undefined,
+      };
+    });
+
+    setIsEditModalOpen(false);
+  }, []);
 
   const placeholder = (
     <div className="flex flex-col items-center justify-center min-h-[400px] text-center">
@@ -308,6 +504,21 @@ export default function AccountDashboard() {
               <span className="font-semibold text-gray-900">{row.value}</span>
             </div>
           ))}
+          {accountData.companyDescription && (
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              <span className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Background</span>
+              <p className="text-sm text-gray-600 leading-relaxed">{accountData.companyDescription}</p>
+            </div>
+          )}
+          <div className="mt-4 pt-3 border-t border-gray-200">
+            <button
+              onClick={openEditModal}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 transition"
+            >
+              <span className="material-symbols-outlined text-[16px]">edit</span>
+              Edit Company Data
+            </button>
+          </div>
         </div>
       </SectionCard>
 
@@ -487,6 +698,15 @@ export default function AccountDashboard() {
           {hasAnalyzed && activeTab === "tech" && techTab}
         </div>
       </main>
+
+      {editData && (
+        <CompanyEditModal
+          isOpen={isEditModalOpen}
+          onClose={() => setIsEditModalOpen(false)}
+          onSave={handleSaveCompanyData}
+          initialData={editData}
+        />
+      )}
     </div>
   );
 }

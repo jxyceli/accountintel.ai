@@ -1,10 +1,10 @@
-# Active Context: Next.js Starter Template
+# Active Context: Account Intelligence Dashboard
 
 ## Current State
 
-**Template Status**: ✅ Ready for development
+**Template Status**: ✅ Dashboard with structured company data model
 
-The template is a clean Next.js 16 starter with TypeScript and Tailwind CSS 4. It's ready for AI-assisted expansion to build any type of application.
+The application is an Account Intelligence Dashboard with SQLite + Drizzle ORM for structured company data persistence. Replaced brittle scraping/mock data approach with verified database fields and manual override UI.
 
 ## Recently Completed
 
@@ -14,6 +14,12 @@ The template is a clean Next.js 16 starter with TypeScript and Tailwind CSS 4. I
 - [x] ESLint configuration
 - [x] Memory bank documentation
 - [x] Recipe system for common features
+- [x] SQLite + Drizzle ORM database setup (schema, client, migrations)
+- [x] Company data table with structured fields (domain, company_name, company_description, industry, website_url, employees, revenue, hq)
+- [x] Server actions for company data CRUD (getCompanyByDomain, upsertCompany)
+- [x] AccountDashboard updated to fetch from database instead of mock data
+- [x] Manual override edit modal for company background data
+- [x] suppressHydrationWarning added to RootLayout body tag
 
 ## Current Structure
 
@@ -22,6 +28,13 @@ The template is a clean Next.js 16 starter with TypeScript and Tailwind CSS 4. I
 | `src/app/page.tsx` | Home page | ✅ Ready |
 | `src/app/layout.tsx` | Root layout | ✅ Ready |
 | `src/app/globals.css` | Global styles | ✅ Ready |
+| `src/app/actions.ts` | Server actions for company CRUD | ✅ Ready |
+| `src/components/AccountDashboard.tsx` | Main dashboard component | ✅ Updated |
+| `src/db/schema.ts` | Drizzle ORM schema (companies table) | ✅ Ready |
+| `src/db/index.ts` | Database client | ✅ Ready |
+| `src/db/migrate.ts` | Migration runner | ✅ Ready |
+| `src/db/migrations/` | Generated SQL migrations | ✅ Ready |
+| `drizzle.config.ts` | Drizzle configuration | ✅ Ready |
 | `.kilocode/` | AI context & recipes | ✅ Ready |
 
 ## Current Focus
@@ -85,3 +98,4 @@ export async function GET() {
 | Date | Changes |
 |------|---------|
 | Initial | Template created with base setup |
+| 2026-05-22 | Added SQLite + Drizzle ORM database, structured company data model, server actions, manual override UI |
